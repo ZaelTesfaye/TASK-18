@@ -1,0 +1,30 @@
+# Environment secrets
+.env
+
+.claude/
+.vscode/
+*.tmp.md
+**/temp/
+
+# Environment variables
+.env
+*.local
+
+#  environments
+venv/
+.venv/
+env/
+.env/
+# Rust build artifacts
+target/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml

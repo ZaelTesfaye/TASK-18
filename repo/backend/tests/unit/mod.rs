@@ -1,0 +1,9 @@
+mod test_order_state_machine;
+mod test_encryption;
+mod test_auth;
+mod test_rating_aggregation;
+mod test_password_policy;
+mod test_rate_limit;
+mod test_rbac;
+mod test_contract;
+mod test_leaderboard_tiebreak;

@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silverscreen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # --- Database ---
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_MAX_CONNECTIONS: "20"
+      # --- Server ---
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      # --- Auth / JWT --- (override in .env for production)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRY_MINUTES: "30"
+      JWT_REFRESH_EXPIRY_DAYS: "7"
+      # --- Encryption --- (override in .env for production)
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ENCRYPTION_KEY_VERSION: "1"
+      # --- TLS ---
+      ENABLE_TLS: "${ENABLE_TLS}"
+      # --- Rate Limiting ---
+      RATE_LIMIT_LOGIN_MAX: "10"
+      RATE_LIMIT_LOGIN_WINDOW_SECONDS: "900"
+      # --- Risk Rules ---
+      RISK_BULK_ORDER_THRESHOLD: "10"
+      RISK_BULK_ORDER_WINDOW_MINUTES: "60"
+      RISK_DISCOUNT_ABUSE_THRESHOLD: "5"
+      RISK_DISCOUNT_ABUSE_WINDOW_MINUTES: "60"
+      # --- Backup --- (override in .env for production)
+      BACKUP_DIR: /data/backups
+      BACKUP_RETENTION_COUNT: "14"
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+      # --- Retention ---
+      RETENTION_ORDERS_YEARS: "7"
+      RETENTION_AUTH_LOGS_YEARS: "2"
+      # --- Logging ---
+      RUST_LOG: info
+      LOG_FORMAT: structured
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backup_data:/data/backups
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  backup_data:

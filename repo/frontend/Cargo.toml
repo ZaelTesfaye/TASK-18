@@ -1,0 +1,46 @@
+[package]
+name = "silverscreen-frontend"
+version = "1.0.0"
+edition = "2021"
+description = "SilverScreen Commerce & Review Platform - Yew Frontend"
+
+[dependencies]
+yew = { version = "0.21", features = ["csr"] }
+yew-router = "0.18"
+gloo = { version = "0.11", features = ["timers", "storage", "dialogs", "net", "file"] }
+gloo-net = "0.5"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "HtmlInputElement",
+    "HtmlSelectElement",
+    "HtmlTextAreaElement",
+    "FormData",
+    "File",
+    "FileList",
+    "Blob",
+    "BlobPropertyBag",
+    "Window",
+    "Document",
+    "Storage",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "Response",
+    "console",
+    "Location",
+] }
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+uuid = { version = "1", features = ["v4", "serde", "js"] }
+log = "0.4"
+wasm-logger = "0.2"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true

@@ -1,0 +1,12 @@
+pub mod home;
+pub mod login;
+pub mod register;
+pub mod product_detail;
+pub mod cart;
+pub mod checkout;
+pub mod orders;
+pub mod order_detail;
+pub mod rate_product;
+pub mod leaderboards;
+pub mod reviewer;
+pub mod admin;

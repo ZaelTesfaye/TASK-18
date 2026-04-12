@@ -1,0 +1,13 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[watch]
+watch = ["src", "index.html", "styles"]
+
+[serve]
+address = "0.0.0.0"
+port = 8081
+
+[[proxy]]
+backend = "http://localhost:8080/api"

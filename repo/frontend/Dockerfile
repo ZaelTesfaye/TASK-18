@@ -1,0 +1,29 @@
+FROM rust:1.75-bookworm AS builder
+
+RUN rustup target add wasm32-unknown-unknown
+RUN cargo install trunk wasm-bindgen-cli
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.toml
+
+# Create dummy main to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --target wasm32-unknown-unknown --release 2>/dev/null || true
+RUN rm -rf src
+
+# Copy actual source
+COPY . .
+
+# Build with trunk
+RUN trunk build --release index.html
+
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
