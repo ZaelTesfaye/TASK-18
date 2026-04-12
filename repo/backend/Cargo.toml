@@ -44,9 +44,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-actix-web = "0.7"
 
-# Pinned transitive dependencies (indexmap >=2.8 requires edition2024 / Rust 1.85+)
-indexmap = "=2.7.1"
-
 # Utilities
 sha2 = "0.10"
 hex = "0.4"
