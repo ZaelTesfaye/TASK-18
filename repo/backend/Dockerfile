@@ -1,5 +1,11 @@
 FROM rust:1.88-bookworm AS builder
 
+ENV CARGO_BUILD_JOBS=1
+ENV CARGO_INCREMENTAL=0
+ENV CARGO_NET_RETRY=10
+ENV CARGO_HTTP_TIMEOUT=600
+ENV RUSTFLAGS="-Ccodegen-units=1"
+
 WORKDIR /app
 
 # Copy manifests and lock file
@@ -8,7 +14,7 @@ COPY Cargo.lock Cargo.lock
 
 # Create dummy lib + main to cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs && touch src/lib.rs
-RUN cargo build --release
+RUN cargo build --locked --release
 RUN rm -rf src
 
 # Copy actual source (.dockerignore excludes target/)
@@ -19,7 +25,7 @@ COPY . .
 RUN touch src/main.rs src/lib.rs
 
 # Build the application
-RUN cargo build --release
+RUN cargo build --locked --release
 
 FROM debian:bookworm-slim
 
