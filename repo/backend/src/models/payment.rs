@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::models::common::Decimal;
+
 /// Full payment_events row from the `payment_events` table.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct PaymentEvent {
@@ -10,7 +12,7 @@ pub struct PaymentEvent {
     pub order_id: Uuid,
     pub idempotency_key: String,
     #[sqlx(try_from = "bigdecimal::BigDecimal")]
-    pub amount: f64,
+    pub amount: Decimal,
     pub status: String,
     pub payment_method: String,
     pub response_data: Option<serde_json::Value>,
@@ -36,7 +38,7 @@ pub struct Invoice {
     pub order_id: Uuid,
     pub invoice_number: String,
     #[sqlx(try_from = "bigdecimal::BigDecimal")]
-    pub total_amount: f64,
+    pub total_amount: Decimal,
     pub line_items: serde_json::Value,
     pub created_at: DateTime<Utc>,
 }

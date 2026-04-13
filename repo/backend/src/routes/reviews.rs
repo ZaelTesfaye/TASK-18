@@ -477,6 +477,7 @@ async fn upload_attachment(
         filename,
         mime_type,
         size_bytes,
+        approval_status: "Pending".to_string(),
         uploaded_at: chrono::Utc::now(),
     };
 

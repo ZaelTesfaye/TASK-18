@@ -2,16 +2,21 @@ FROM rust:1.88-bookworm AS builder
 
 WORKDIR /app
 
-# Copy manifests
+# Copy manifests and lock file
 COPY Cargo.toml Cargo.toml
+COPY Cargo.lock Cargo.lock
 
-# Create dummy main to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release 2>/dev/null || true
+# Create dummy lib + main to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs && touch src/lib.rs
+RUN cargo build --release
 RUN rm -rf src
 
-# Copy actual source
+# Copy actual source (.dockerignore excludes target/)
 COPY . .
+
+# Force cargo to detect source change (COPY preserves mtime which can be
+# older than the cached dummy build, causing cargo to skip recompilation)
+RUN touch src/main.rs src/lib.rs
 
 # Build the application
 RUN cargo build --release

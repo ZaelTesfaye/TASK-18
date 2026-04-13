@@ -216,8 +216,8 @@ pub fn reviewer_submit_page(props: &Props) -> Html {
             } else { html! {} }}
 
             <form onsubmit={on_submit} class="review-form">
-                { // Render fields from template schema if available, otherwise fall back to defaults
-                    let template_fields: Vec<(String, String, String)> = r.template_schema
+                {{ // Render fields from template schema if available, otherwise fall back to defaults
+                    let template_fields = r.template_schema
                         .as_ref()
                         .and_then(|s| s.as_object())
                         .map(|schema_obj| {
@@ -289,7 +289,7 @@ pub fn reviewer_submit_page(props: &Props) -> Html {
                         }
                     })}
                     </> }
-                }
+                }}
 
                 // File upload area — files are uploaded after submission via the attachment API
                 <div class="form-group">

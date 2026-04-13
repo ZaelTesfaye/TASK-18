@@ -70,7 +70,7 @@ pub async fn place_order(
                 AppError::InternalError(format!("Failed to reserve inventory: {}", e))
             })?;
 
-        let line_total = product.price * item.quantity as f64;
+        let line_total = *product.price * item.quantity as f64;
         total_amount += line_total;
 
         // Create order item
@@ -82,7 +82,7 @@ pub async fn place_order(
         .bind(order_id)
         .bind(item.product_id)
         .bind(item.quantity)
-        .bind(product.price)
+        .bind(*product.price)
         .bind(line_total)
         .execute(&mut *tx)
         .await
@@ -130,7 +130,7 @@ struct ProductRow {
     #[allow(dead_code)]
     id: Uuid,
     #[sqlx(try_from = "bigdecimal::BigDecimal")]
-    price: f64,
+    price: crate::models::common::Decimal,
     stock: i32,
 }
 

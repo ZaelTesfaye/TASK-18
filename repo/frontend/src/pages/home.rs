@@ -251,7 +251,7 @@ pub fn home_page() -> Html {
                     <select class="form-select" onchange={on_genre} value={(*genre).clone()}>
                         <option value="">{ "All Genres" }</option>
                         { for genres.iter().map(|g| html! {
-                            <option value={g.to_string()} selected={**genre == *g}>{ g }</option>
+                            <option value={g.to_string()} selected={**genre == **g}>{ g }</option>
                         })}
                     </select>
                 </div>

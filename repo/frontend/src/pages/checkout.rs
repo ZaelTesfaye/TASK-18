@@ -88,6 +88,7 @@ pub fn checkout_page() -> Html {
         let submitting = submitting.clone();
         let error = error.clone();
         let order = order.clone();
+        let cart_for_submit = cart.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
             let n = (*name).clone();
@@ -108,7 +109,7 @@ pub fn checkout_page() -> Html {
             submitting.set(true);
             error.set(None);
 
-            let cart_ref = (*cart).clone();
+            let cart_ref = (*cart_for_submit).clone();
             spawn_local(async move {
                 // Build items from cart
                 let items: Vec<OrderItemRequest> = cart_ref

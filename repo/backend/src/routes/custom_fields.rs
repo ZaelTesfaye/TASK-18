@@ -174,6 +174,7 @@ async fn update_field(
     let field_type = req.field_type.unwrap_or(existing.field_type.clone());
     let allowed_values = req
         .allowed_values
+        .clone()
         .map(|v| serde_json::json!(v))
         .or(existing.allowed_values.clone());
 
