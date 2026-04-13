@@ -27,7 +27,7 @@ RUN set -eux; \
     cargo install --locked --jobs 1 trunk@${trunk_version}; \
     fi; \
     trunk --version
-RUN trunk tools install wasm-bindgen --version 0.2.118
+RUN cargo install --locked --jobs 1 wasm-bindgen-cli@0.2.118
 
 WORKDIR /app
 
