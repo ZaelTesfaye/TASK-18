@@ -7,26 +7,26 @@ ENV CARGO_HTTP_TIMEOUT=600
 ENV RUSTFLAGS="-Ccodegen-units=1"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-	curl \
-	ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add wasm32-unknown-unknown
 # Install prebuilt trunk binary to avoid expensive source compilation on low-memory builders.
 RUN set -eux; \
-		case "$(uname -m)" in \
-			x86_64) trunk_target="x86_64-unknown-linux-gnu" ;; \
-			aarch64) trunk_target="aarch64-unknown-linux-gnu" ;; \
-			*) echo "Unsupported architecture: $(uname -m)"; exit 1 ;; \
-		esac; \
-		trunk_version="0.21.14"; \
-		if curl --retry 6 --retry-delay 2 --retry-connrefused -fSL "https://github.com/trunk-rs/trunk/releases/download/v${trunk_version}/trunk-${trunk_target}.tar.gz" | tar -xz -C /usr/local/bin trunk; then \
-			echo "Installed prebuilt trunk binary"; \
-		else \
-			echo "Prebuilt trunk download failed, falling back to cargo install"; \
-			cargo install --locked --jobs 1 trunk@${trunk_version}; \
-		fi; \
-		trunk --version
+    case "$(uname -m)" in \
+    x86_64) trunk_target="x86_64-unknown-linux-gnu" ;; \
+    aarch64) trunk_target="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;; \
+    esac; \
+    trunk_version="0.21.14"; \
+    if curl --retry 6 --retry-delay 2 --retry-connrefused -fSL "https://github.com/trunk-rs/trunk/releases/download/v${trunk_version}/trunk-${trunk_target}.tar.gz" | tar -xz -C /usr/local/bin trunk; then \
+    echo "Installed prebuilt trunk binary"; \
+    else \
+    echo "Prebuilt trunk download failed, falling back to cargo install"; \
+    cargo install --locked --jobs 1 trunk@${trunk_version}; \
+    fi; \
+    trunk --version
 RUN trunk tools install wasm-bindgen --version 0.2.118
 
 WORKDIR /app
