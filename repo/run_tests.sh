@@ -12,6 +12,61 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Use host cargo when present; otherwise fall back to an ephemeral Rust container.
+USE_DOCKER_CARGO=0
+if ! command -v cargo >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1; then
+    USE_DOCKER_CARGO=1
+    echo "Host cargo not found. Using Dockerized Rust toolchain for compile/tests."
+  else
+    echo "FATAL: cargo not found and docker is unavailable."
+    exit 1
+  fi
+fi
+
+run_cargo() {
+  if [ "$USE_DOCKER_CARGO" -eq 1 ]; then
+    local docker_args=(run --rm -v "$PWD:/work" -w /work)
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+      docker_args+=(--env-file "$SCRIPT_DIR/.env")
+    fi
+
+    # On Linux CI hosts, host networking lets tests reach services exposed on localhost.
+    if [ "$(uname -s)" = "Linux" ]; then
+      docker_args+=(--network host)
+    fi
+
+    for env_name in DATABASE_URL JWT_SECRET ENCRYPTION_KEY RUST_LOG; do
+      if [ -n "${!env_name:-}" ]; then
+        docker_args+=(--env "$env_name")
+      fi
+    done
+
+    docker "${docker_args[@]}" rust:1.88-bookworm cargo "$@"
+  else
+    cargo "$@"
+  fi
+}
+
+run_cargo_frontend_wasm_check() {
+  if [ "$USE_DOCKER_CARGO" -eq 1 ]; then
+    local docker_args=(run --rm -v "$PWD:/work" -w /work)
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+      docker_args+=(--env-file "$SCRIPT_DIR/.env")
+    fi
+
+    if [ "$(uname -s)" = "Linux" ]; then
+      docker_args+=(--network host)
+    fi
+
+    docker "${docker_args[@]}" rust:1.88-bookworm /bin/bash -lc "rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true; cargo check --target wasm32-unknown-unknown"
+  else
+    cargo check --target wasm32-unknown-unknown
+  fi
+}
+
 TOTAL=0
 PASSED=0
 FAILED=0
@@ -25,7 +80,7 @@ echo ""
 # --- Compile Check Gate ---
 echo "--- Compile Check: Backend ---"
 cd /app/backend 2>/dev/null || cd backend 2>/dev/null || cd /repo/backend
-if ! cargo check 2>&1; then
+if ! run_cargo check 2>&1; then
   echo "FATAL: Backend cargo check failed. Fix compile errors before running tests."
   exit 1
 fi
@@ -34,9 +89,9 @@ echo ""
 
 echo "--- Compile Check: Frontend (wasm32) ---"
 cd /app/frontend 2>/dev/null || cd ../frontend 2>/dev/null || cd /repo/frontend
-if ! cargo check --target wasm32-unknown-unknown 2>&1; then
+if ! run_cargo_frontend_wasm_check 2>&1; then
   # Fallback: try native check if wasm target not installed
-  if ! cargo check 2>&1; then
+  if ! run_cargo check 2>&1; then
     echo "FATAL: Frontend cargo check failed. Fix compile errors before running tests."
     exit 1
   fi
@@ -48,7 +103,7 @@ cd /app/backend 2>/dev/null || cd ../backend 2>/dev/null || cd /repo/backend
 
 # --- Backend Unit Tests ---
 echo "--- Backend Unit Tests ---"
-UNIT_OUTPUT=$(cargo test --lib -- --test-threads=1 2>&1) || true
+UNIT_OUTPUT=$(run_cargo test --lib -- --test-threads=1 2>&1) || true
 UNIT_TOTAL=$(echo "$UNIT_OUTPUT" | grep -oP 'test result:.*?(\d+) passed' | grep -oP '\d+' | tail -1 || echo "0")
 UNIT_FAILED=$(echo "$UNIT_OUTPUT" | grep -oP '(\d+) failed' | grep -oP '\d+' | head -1 || echo "0")
 UNIT_PASSED=${UNIT_TOTAL:-0}
@@ -65,7 +120,7 @@ echo ""
 
 # --- Backend Integration/API Tests ---
 echo "--- Backend API Tests ---"
-API_OUTPUT=$(cargo test --test '*' -- --test-threads=1 2>&1) || true
+API_OUTPUT=$(run_cargo test --test '*' -- --test-threads=1 2>&1) || true
 API_TOTAL=$(echo "$API_OUTPUT" | grep -oP 'test result:.*?(\d+) passed' | grep -oP '\d+' | tail -1 || echo "0")
 API_FAILED=$(echo "$API_OUTPUT" | grep -oP '(\d+) failed' | grep -oP '\d+' | head -1 || echo "0")
 API_PASSED=${API_TOTAL:-0}
@@ -83,7 +138,7 @@ echo ""
 # --- Frontend Unit Tests ---
 echo "--- Frontend Unit Tests ---"
 cd /app/frontend 2>/dev/null || cd ../frontend 2>/dev/null || cd /repo/frontend
-FE_OUTPUT=$(cargo test --all-targets 2>&1) || true
+FE_OUTPUT=$(run_cargo test --all-targets 2>&1) || true
 FE_TOTAL=$(echo "$FE_OUTPUT" | grep -oP 'test result:.*?(\d+) passed' | grep -oP '\d+' | tail -1 || echo "0")
 FE_FAILED=$(echo "$FE_OUTPUT" | grep -oP '(\d+) failed' | grep -oP '\d+' | head -1 || echo "0")
 FE_PASSED=${FE_TOTAL:-0}
@@ -100,7 +155,7 @@ echo ""
 
 # --- Frontend E2E Tests ---
 echo "--- Frontend E2E Tests (contract tests) ---"
-E2E_OUTPUT=$(cargo test --test '*' 2>&1) || true
+E2E_OUTPUT=$(run_cargo test --test '*' 2>&1) || true
 E2E_TOTAL=$(echo "$E2E_OUTPUT" | grep -oP 'test result:.*?(\d+) passed' | grep -oP '\d+' | tail -1 || echo "0")
 E2E_FAILED=$(echo "$E2E_OUTPUT" | grep -oP '(\d+) failed' | grep -oP '\d+' | head -1 || echo "0")
 E2E_PASSED=${E2E_TOTAL:-0}
