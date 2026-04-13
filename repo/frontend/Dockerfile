@@ -1,7 +1,9 @@
 FROM rust:1.88-bookworm AS builder
 
 RUN rustup target add wasm32-unknown-unknown
-RUN cargo install trunk wasm-bindgen-cli@0.2.118
+# Install CLI tools in separate locked steps for reproducible, lower-memory builds.
+RUN cargo install --locked --jobs 1 trunk@0.21.14
+RUN cargo install --locked --jobs 1 wasm-bindgen-cli@0.2.118
 
 WORKDIR /app
 
