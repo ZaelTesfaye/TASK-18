@@ -72,6 +72,17 @@
 - **Issue set from prior report:** materially resolved.
 - **Acceptance for this fix-check:** **Pass (for prior issue set re-check)**
 
+---
+
+## Source of Truth and Verification Traceability
+
+| Finding | Source Report Line                     | Current Code Location                                | Status  |
+| ------- | -------------------------------------- | ---------------------------------------------------- | ------- |
+| F-01    | [audit_report-1.md](audit_report-1.md) | backend/src/routes/reviews.rs:169-174                | Fixed ✓ |
+| F-02    | [audit_report-1.md](audit_report-1.md) | frontend/src/types.rs:119-120,272                    | Fixed ✓ |
+| F-03    | [audit_report-1.md](audit_report-1.md) | backend/src/routes/products.rs:76-82                 | Fixed ✓ |
+| F-04    | [audit_report-1.md](audit_report-1.md) | backend/tests/api/test_review_api.rs:525-541,590-618 | Fixed ✓ |
+
 ## Boundary Reminder
 
 - This conclusion is static-only and does not claim runtime behavior without execution.

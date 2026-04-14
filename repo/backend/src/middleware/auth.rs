@@ -137,3 +137,61 @@ fn extract_bearer_token(req: &HttpRequest) -> Result<String, AppError> {
 
     Ok(token)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::test::TestRequest;
+
+    #[test]
+    fn test_extract_bearer_token_valid() {
+        let req = TestRequest::default()
+            .insert_header(("Authorization", "Bearer mytoken123"))
+            .to_http_request();
+        let token = extract_bearer_token(&req).unwrap();
+        assert_eq!(token, "mytoken123");
+    }
+
+    #[test]
+    fn test_extract_bearer_token_missing_header() {
+        let req = TestRequest::default().to_http_request();
+        let err = extract_bearer_token(&req).unwrap_err();
+        match err {
+            AppError::Unauthorized(msg) => assert!(msg.contains("Missing")),
+            _ => panic!("Expected Unauthorized"),
+        }
+    }
+
+    #[test]
+    fn test_extract_bearer_token_wrong_scheme() {
+        let req = TestRequest::default()
+            .insert_header(("Authorization", "Basic abc123"))
+            .to_http_request();
+        let err = extract_bearer_token(&req).unwrap_err();
+        match err {
+            AppError::Unauthorized(msg) => assert!(msg.contains("Bearer scheme")),
+            _ => panic!("Expected Unauthorized"),
+        }
+    }
+
+    #[test]
+    fn test_extract_bearer_token_empty_token() {
+        let req = TestRequest::default()
+            .insert_header(("Authorization", "Bearer "))
+            .to_http_request();
+        let err = extract_bearer_token(&req).unwrap_err();
+        match err {
+            AppError::Unauthorized(msg) => assert!(msg.contains("empty")),
+            _ => panic!("Expected Unauthorized"),
+        }
+    }
+
+    #[test]
+    fn test_extract_bearer_token_trims_whitespace() {
+        let req = TestRequest::default()
+            .insert_header(("Authorization", "Bearer  token_with_spaces  "))
+            .to_http_request();
+        let token = extract_bearer_token(&req).unwrap();
+        assert_eq!(token, "token_with_spaces");
+    }
+}

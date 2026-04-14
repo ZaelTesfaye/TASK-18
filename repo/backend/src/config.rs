@@ -243,3 +243,115 @@ fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
         .and_then(|v| v.parse().ok())
         .unwrap_or(default)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_env_or_returns_default() {
+        // Use a key that definitely doesn't exist
+        let val = env_or("__SILVERSCREEN_TEST_NONEXISTENT__", "fallback");
+        assert_eq!(val, "fallback");
+    }
+
+    #[test]
+    fn test_env_parse_returns_default() {
+        let val: u32 = env_parse("__SILVERSCREEN_TEST_NONEXISTENT__", 42);
+        assert_eq!(val, 42);
+    }
+
+    #[test]
+    fn test_env_parse_bool_default() {
+        let val: bool = env_parse("__SILVERSCREEN_TEST_NONEXISTENT__", false);
+        assert!(!val);
+    }
+
+    /// Helper to build a Config with specific secret values for testing validation.
+    fn make_config(jwt: &str, enc: &str, backup: &str) -> Config {
+        Config {
+            database_url: "postgres://localhost/test".to_string(),
+            database_max_connections: 5,
+            server_host: "127.0.0.1".to_string(),
+            server_port: 8080,
+            jwt_secret: jwt.to_string(),
+            jwt_access_expiry_minutes: 30,
+            jwt_refresh_expiry_days: 7,
+            encryption_key: enc.to_string(),
+            encryption_key_version: 1,
+            enable_tls: false,
+            rate_limit_login_max: 10,
+            rate_limit_login_ip_max: 10,
+            rate_limit_login_window_seconds: 900,
+            risk_bulk_order_threshold: 10,
+            risk_bulk_order_window_minutes: 60,
+            risk_discount_abuse_threshold: 5,
+            risk_discount_abuse_window_minutes: 60,
+            backup_dir: "/tmp/backups".to_string(),
+            backup_retention_count: 14,
+            backup_encryption_key: backup.to_string(),
+            retention_orders_years: 7,
+            retention_auth_logs_years: 2,
+            rust_log: "info".to_string(),
+            log_format: "structured".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_validate_secrets_good_values_pass() {
+        // Use strong, non-placeholder values
+        let config = make_config(
+            "a_real_jwt_secret_that_is_definitely_long_enough_64chars_xxxxxx",
+            "abcdefghijklmnopqrstuvwxyz012345",  // 32 bytes
+            "a_real_backup_key_thats_long_enough",
+        );
+        // Should not panic — set dev mode just in case
+        std::env::set_var("SILVERSCREEN_DEV_MODE", "true");
+        config.validate_secrets();
+        std::env::remove_var("SILVERSCREEN_DEV_MODE");
+    }
+
+    #[test]
+    #[should_panic(expected = "Encryption key validation failed")]
+    fn test_validate_secrets_rejects_known_encryption_key() {
+        let config = make_config(
+            "a_real_jwt_secret_that_is_definitely_long_enough_64chars_xxxxxx",
+            "0123456789abcdef0123456789abcdef",  // known placeholder
+            "a_real_backup_key_thats_long_enough",
+        );
+        config.validate_secrets();
+    }
+
+    #[test]
+    #[should_panic(expected = "Encryption key validation failed")]
+    fn test_validate_secrets_rejects_known_backup_key() {
+        let config = make_config(
+            "a_real_jwt_secret_that_is_definitely_long_enough_64chars_xxxxxx",
+            "abcdefghijklmnopqrstuvwxyz012345",
+            "local_dev_backup_key_not_for_prod",  // known placeholder
+        );
+        config.validate_secrets();
+    }
+
+    #[test]
+    #[should_panic(expected = "Encryption key validation failed")]
+    fn test_validate_secrets_rejects_short_encryption_key() {
+        let config = make_config(
+            "a_real_jwt_secret_that_is_definitely_long_enough_64chars_xxxxxx",
+            "too_short",  // not 32 bytes
+            "a_real_backup_key_thats_long_enough",
+        );
+        config.validate_secrets();
+    }
+
+    #[test]
+    #[should_panic(expected = "Encryption key validation failed")]
+    fn test_validate_secrets_rejects_change_me_encryption() {
+        let config = make_config(
+            "a_real_jwt_secret_that_is_definitely_long_enough_64chars_xxxxxx",
+            "CHANGE_ME_use_openssl_rand_hex_32",  // contains CHANGE_ME
+            "a_real_backup_key_thats_long_enough",
+        );
+        config.validate_secrets();
+    }
+}

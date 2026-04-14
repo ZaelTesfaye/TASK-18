@@ -273,3 +273,141 @@ pub async fn can_publish(pool: &PgPool, field_id: Uuid) -> Result<bool, AppError
 
     Ok(count == 0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- FieldType parsing --
+
+    #[test]
+    fn test_field_type_from_str_all_valid() {
+        assert_eq!(FieldType::from_str("Text").unwrap(), FieldType::Text);
+        assert_eq!(FieldType::from_str("Enum").unwrap(), FieldType::Enum);
+        assert_eq!(FieldType::from_str("Date").unwrap(), FieldType::Date);
+        assert_eq!(FieldType::from_str("Number").unwrap(), FieldType::Number);
+    }
+
+    #[test]
+    fn test_field_type_from_str_invalid() {
+        assert!(FieldType::from_str("Invalid").is_err());
+        assert!(FieldType::from_str("text").is_err()); // case sensitive
+    }
+
+    #[test]
+    fn test_field_type_roundtrip() {
+        for ft in &[FieldType::Text, FieldType::Enum, FieldType::Date, FieldType::Number] {
+            assert_eq!(FieldType::from_str(ft.as_str()).unwrap(), *ft);
+        }
+    }
+
+    // -- try_convert to Text --
+
+    #[test]
+    fn test_convert_number_to_text() {
+        let val = serde_json::json!(42);
+        let result = try_convert(&val, &FieldType::Text, &None).unwrap();
+        assert_eq!(result, serde_json::json!("42"));
+    }
+
+    #[test]
+    fn test_convert_string_to_text() {
+        let val = serde_json::json!("hello");
+        let result = try_convert(&val, &FieldType::Text, &None).unwrap();
+        assert_eq!(result, serde_json::json!("hello"));
+    }
+
+    #[test]
+    fn test_convert_bool_to_text() {
+        let val = serde_json::json!(true);
+        let result = try_convert(&val, &FieldType::Text, &None).unwrap();
+        assert_eq!(result, serde_json::json!("true"));
+    }
+
+    #[test]
+    fn test_convert_null_passes_through() {
+        let val = serde_json::Value::Null;
+        let result = try_convert(&val, &FieldType::Number, &None).unwrap();
+        assert_eq!(result, serde_json::Value::Null);
+    }
+
+    // -- try_convert to Number --
+
+    #[test]
+    fn test_convert_string_number_to_number() {
+        let val = serde_json::json!("42.5");
+        let result = try_convert(&val, &FieldType::Number, &None).unwrap();
+        assert_eq!(result, serde_json::json!(42.5));
+    }
+
+    #[test]
+    fn test_convert_non_numeric_string_to_number_fails() {
+        let val = serde_json::json!("not_a_number");
+        let result = try_convert(&val, &FieldType::Number, &None);
+        assert!(result.is_err());
+    }
+
+    // -- try_convert to Date --
+
+    #[test]
+    fn test_convert_valid_date_string() {
+        let val = serde_json::json!("2024-06-15");
+        let result = try_convert(&val, &FieldType::Date, &None).unwrap();
+        assert_eq!(result, serde_json::json!("2024-06-15"));
+    }
+
+    #[test]
+    fn test_convert_rfc3339_date_string() {
+        let val = serde_json::json!("2024-06-15T10:30:00+00:00");
+        let result = try_convert(&val, &FieldType::Date, &None).unwrap();
+        assert!(result.is_string());
+    }
+
+    #[test]
+    fn test_convert_invalid_date_fails() {
+        let val = serde_json::json!("not-a-date");
+        let result = try_convert(&val, &FieldType::Date, &None);
+        assert!(result.is_err());
+    }
+
+    // -- try_convert to Enum --
+
+    #[test]
+    fn test_convert_to_enum_in_allowed_list() {
+        let allowed = Some(vec!["Red".to_string(), "Green".to_string(), "Blue".to_string()]);
+        let val = serde_json::json!("Green");
+        let result = try_convert(&val, &FieldType::Enum, &allowed).unwrap();
+        assert_eq!(result, serde_json::json!("Green"));
+    }
+
+    #[test]
+    fn test_convert_to_enum_not_in_allowed_list() {
+        let allowed = Some(vec!["Red".to_string(), "Green".to_string()]);
+        let val = serde_json::json!("Purple");
+        let result = try_convert(&val, &FieldType::Enum, &allowed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_convert_to_enum_no_allowed_list() {
+        let val = serde_json::json!("anything");
+        let result = try_convert(&val, &FieldType::Enum, &None).unwrap();
+        assert_eq!(result, serde_json::json!("anything"));
+    }
+
+    // -- Complex values --
+
+    #[test]
+    fn test_convert_object_fails() {
+        let val = serde_json::json!({"nested": "object"});
+        let result = try_convert(&val, &FieldType::Text, &None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_convert_array_fails() {
+        let val = serde_json::json!([1, 2, 3]);
+        let result = try_convert(&val, &FieldType::Text, &None);
+        assert!(result.is_err());
+    }
+}

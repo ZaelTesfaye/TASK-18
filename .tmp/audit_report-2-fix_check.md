@@ -63,4 +63,16 @@
 
 ## Final Assessment
 
-The critical backend contract/logic issues from `audit_report-12` are now addressed. The remaining gap is test realism depth on frontend: browser tests now exist, but critical user journeys are still not fully covered by execution-based end-to-end tests.
+The critical backend contract/logic issues from [.tmp/audit_report-2.md](audit_report-2.md) are now addressed. The remaining gap is test realism depth on frontend: browser tests now exist, but critical user journeys are still not fully covered by execution-based end-to-end tests.
+
+---
+
+## Source of Truth and Verification Traceability
+
+| Finding | Source Report Line                     | Current Code Location                                 | Status             |
+| ------- | -------------------------------------- | ----------------------------------------------------- | ------------------ |
+| H-01    | [audit_report-2.md](audit_report-2.md) | backend/src/models/audit.rs:22,50,66                  | Fixed ✓            |
+| H-02    | [audit_report-2.md](audit_report-2.md) | frontend/tests/wasm/test_browser.rs:23,32             | Partially Fixed ⚠️ |
+| M-01    | [audit_report-2.md](audit_report-2.md) | backend/src/routes/reports.rs:23,25,98,99             | Fixed ✓            |
+| M-02    | [audit_report-2.md](audit_report-2.md) | backend/src/models/user.rs:25,26                      | Fixed ✓            |
+| M-03    | [audit_report-2.md](audit_report-2.md) | backend/src/services/order_service.rs:575,587,589,598 | Fixed ✓            |

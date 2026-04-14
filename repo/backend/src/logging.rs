@@ -122,4 +122,50 @@ mod tests {
         assert!(!result.contains("123-45-6789"));
         assert!(result.contains("[SSN REDACTED]"));
     }
+
+    #[test]
+    fn test_redact_jwt_token() {
+        let input = "token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature in log";
+        let result = redact_sensitive(input);
+        assert!(!result.contains("eyJ"));
+        assert!(result.contains("[JWT REDACTED]"));
+    }
+
+    #[test]
+    fn test_redact_password_hash_field() {
+        let input = r#"{"password_hash":"$argon2id$v=19$m=65536"}"#;
+        let result = redact_sensitive(input);
+        assert!(!result.contains("argon2id"));
+        assert!(result.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_redact_secret_field() {
+        let input = r#"{"secret":"my_secret_value"}"#;
+        let result = redact_sensitive(input);
+        assert!(!result.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_redact_token_field() {
+        let input = r#"{"token":"abc123def"}"#;
+        let result = redact_sensitive(input);
+        assert!(!result.contains("abc123def"));
+    }
+
+    #[test]
+    fn test_no_redaction_on_safe_input() {
+        let input = "User alice logged in from 192.168.1.1";
+        let result = redact_sensitive(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_multiple_redactions_in_one_string() {
+        let input = r#"{"password":"sec123"} and SSN 123-45-6789 and Bearer eyJhbGciOiJIUzI1NiJ9.x.y"#;
+        let result = redact_sensitive(input);
+        assert!(!result.contains("sec123"));
+        assert!(!result.contains("123-45-6789"));
+        assert!(!result.contains("eyJ"));
+    }
 }

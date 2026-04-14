@@ -135,6 +135,83 @@ if [ "$API_FAILED" -gt 0 ]; then
 fi
 echo ""
 
+# --- Backend API Coverage (cargo-tarpaulin) ---
+COVERAGE_THRESHOLD=90
+COVERAGE_DIR="$SCRIPT_DIR/coverage"
+mkdir -p "$COVERAGE_DIR"
+
+echo "--- Backend API Coverage ---"
+run_tarpaulin() {
+  if [ "$USE_DOCKER_CARGO" -eq 1 ]; then
+    local docker_args=(run --rm --security-opt seccomp=unconfined -v "$PWD:/work" -w /work)
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+      docker_args+=(--env-file "$SCRIPT_DIR/.env")
+    fi
+    if [ "$(uname -s)" = "Linux" ]; then
+      docker_args+=(--network host)
+    fi
+    for env_name in DATABASE_URL JWT_SECRET ENCRYPTION_KEY RUST_LOG; do
+      if [ -n "${!env_name:-}" ]; then
+        docker_args+=(--env "$env_name")
+      fi
+    done
+    docker "${docker_args[@]}" rust:1.88-bookworm /bin/bash -lc \
+      "cargo install cargo-tarpaulin 2>/dev/null; cargo tarpaulin \$*" -- "$@"
+  else
+    if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
+      cargo install cargo-tarpaulin 2>/dev/null
+    fi
+    cargo tarpaulin "$@"
+  fi
+}
+
+COV_OUTPUT=$(run_tarpaulin \
+  --test-threads=1 \
+  --out json \
+  --output-dir "$COVERAGE_DIR" \
+  --skip-clean \
+  -- --test-threads=1 2>&1) || true
+
+# Extract coverage percentage from JSON artifact
+COV_JSON="$COVERAGE_DIR/tarpaulin-report.json"
+if [ -f "$COV_JSON" ]; then
+  # tarpaulin JSON has a top-level "coverage" field as a percentage
+  COV_PCT=$(python3 -c "
+import json, sys
+with open('$COV_JSON') as f:
+    data = json.load(f)
+# Try different tarpaulin JSON formats
+if 'coverage' in data:
+    print(f\"{data['coverage']:.1f}\")
+elif 'files' in data:
+    covered = sum(f.get('covered', 0) for f in data['files'])
+    total = sum(f.get('coverable', 0) for f in data['files'])
+    print(f'{(covered/total*100) if total > 0 else 0:.1f}')
+else:
+    print('0.0')
+" 2>/dev/null || echo "0.0")
+
+  echo "  Coverage: ${COV_PCT}% (threshold: ${COVERAGE_THRESHOLD}%)"
+  echo "  Artifact: $COV_JSON"
+
+  # Threshold check
+  COV_PASS=$(python3 -c "print('yes' if float('$COV_PCT') >= $COVERAGE_THRESHOLD else 'no')" 2>/dev/null || echo "no")
+  if [ "$COV_PASS" != "yes" ]; then
+    echo "  FAIL: API coverage ${COV_PCT}% is below ${COVERAGE_THRESHOLD}% threshold"
+    FAILED=$((FAILED + 1))
+    TOTAL=$((TOTAL + 1))
+    ERRORS="$ERRORS\n[Coverage] Backend API coverage ${COV_PCT}% < ${COVERAGE_THRESHOLD}% threshold\n"
+  else
+    echo "  PASS: Coverage meets threshold"
+    PASSED=$((PASSED + 1))
+    TOTAL=$((TOTAL + 1))
+  fi
+else
+  echo "  SKIPPED (tarpaulin not available or failed to produce report)"
+  echo "  Output: $(echo "$COV_OUTPUT" | tail -5)"
+fi
+echo ""
+
 # --- Frontend Unit Tests ---
 echo "--- Frontend Unit Tests ---"
 cd /app/frontend 2>/dev/null || cd ../frontend 2>/dev/null || cd /repo/frontend

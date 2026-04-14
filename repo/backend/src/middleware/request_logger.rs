@@ -66,3 +66,28 @@ pub fn redact_sensitive(value: &str) -> String {
     }
     format!("{}****", &value[..2])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_redact_short_value() {
+        assert_eq!(redact_sensitive("abc"), "****");
+        assert_eq!(redact_sensitive(""), "****");
+        assert_eq!(redact_sensitive("1234"), "****");
+    }
+
+    #[test]
+    fn test_redact_long_value() {
+        assert_eq!(redact_sensitive("mysecret"), "my****");
+        assert_eq!(redact_sensitive("password123"), "pa****");
+    }
+
+    #[test]
+    fn test_redact_preserves_first_two_chars() {
+        let result = redact_sensitive("Hello World");
+        assert!(result.starts_with("He"));
+        assert!(result.ends_with("****"));
+    }
+}

@@ -276,3 +276,201 @@ impl OrderStateMachine {
             .any(|(f, t)| f == from && t == to)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- OrderStatus parsing --
+
+    #[test]
+    fn test_status_from_str_all_valid() {
+        let statuses = vec![
+            "Created", "Reserved", "Paid", "Processing", "Shipped",
+            "Delivered", "Completed", "Cancelled", "RefundRequested",
+            "Refunded", "ReturnRequested", "Returned", "ExchangeRequested", "Exchanged",
+        ];
+        for s in statuses {
+            let status = OrderStatus::from_str(s).unwrap();
+            assert_eq!(status.as_str(), s);
+        }
+    }
+
+    #[test]
+    fn test_status_from_str_invalid() {
+        assert!(OrderStatus::from_str("Invalid").is_err());
+        assert!(OrderStatus::from_str("").is_err());
+    }
+
+    #[test]
+    fn test_status_display() {
+        assert_eq!(format!("{}", OrderStatus::Paid), "Paid");
+        assert_eq!(format!("{}", OrderStatus::ReturnRequested), "ReturnRequested");
+    }
+
+    // -- Happy-path transitions --
+
+    #[test]
+    fn test_full_happy_path() {
+        let mut s = OrderStatus::Created;
+        s = OrderStateMachine::transition(s, OrderStatus::Reserved).unwrap();
+        s = OrderStateMachine::transition(s, OrderStatus::Paid).unwrap();
+        s = OrderStateMachine::transition(s, OrderStatus::Processing).unwrap();
+        s = OrderStateMachine::transition(s, OrderStatus::Shipped).unwrap();
+        s = OrderStateMachine::transition(s, OrderStatus::Delivered).unwrap();
+        s = OrderStateMachine::transition(s, OrderStatus::Completed).unwrap();
+        assert_eq!(s, OrderStatus::Completed);
+    }
+
+    #[test]
+    fn test_reserved_to_cancelled() {
+        let result = OrderStateMachine::transition(OrderStatus::Reserved, OrderStatus::Cancelled);
+        assert!(result.is_ok());
+    }
+
+    // -- Illegal transitions --
+
+    #[test]
+    fn test_cannot_skip_states() {
+        let result = OrderStateMachine::transition(OrderStatus::Created, OrderStatus::Paid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_completed_is_terminal() {
+        let result = OrderStateMachine::transition(OrderStatus::Completed, OrderStatus::Shipped);
+        assert!(result.is_err());
+    }
+
+    // -- Return validation --
+
+    #[test]
+    fn test_return_requires_context() {
+        let result = OrderStateMachine::transition(
+            OrderStatus::Delivered,
+            OrderStatus::ReturnRequested,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_requires_reason_code() {
+        let ctx = TransitionContext {
+            reason_code: None,
+            delivered_at: Some(chrono::Utc::now()),
+        };
+        let result = OrderStateMachine::transition_with_context(
+            OrderStatus::Delivered,
+            OrderStatus::ReturnRequested,
+            Some(&ctx),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_rejects_invalid_reason() {
+        let ctx = TransitionContext {
+            reason_code: Some("InvalidReason"),
+            delivered_at: Some(chrono::Utc::now()),
+        };
+        let result = OrderStateMachine::transition_with_context(
+            OrderStatus::Delivered,
+            OrderStatus::ReturnRequested,
+            Some(&ctx),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_within_window_succeeds() {
+        let ctx = TransitionContext {
+            reason_code: Some("Defective"),
+            delivered_at: Some(chrono::Utc::now() - chrono::Duration::days(5)),
+        };
+        let result = OrderStateMachine::transition_with_context(
+            OrderStatus::Delivered,
+            OrderStatus::ReturnRequested,
+            Some(&ctx),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_return_expired_window_fails() {
+        let ctx = TransitionContext {
+            reason_code: Some("Defective"),
+            delivered_at: Some(chrono::Utc::now() - chrono::Duration::days(31)),
+        };
+        let result = OrderStateMachine::transition_with_context(
+            OrderStatus::Delivered,
+            OrderStatus::ReturnRequested,
+            Some(&ctx),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_exchange_requires_context() {
+        let result = OrderStateMachine::transition(
+            OrderStatus::Delivered,
+            OrderStatus::ExchangeRequested,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_all_valid_reason_codes() {
+        for code in VALID_REASON_CODES {
+            let ctx = TransitionContext {
+                reason_code: Some(code),
+                delivered_at: Some(chrono::Utc::now()),
+            };
+            let result = OrderStateMachine::transition_with_context(
+                OrderStatus::Delivered,
+                OrderStatus::ReturnRequested,
+                Some(&ctx),
+            );
+            assert!(result.is_ok(), "Reason code '{}' should be valid", code);
+        }
+    }
+
+    // -- Admin transitions --
+
+    #[test]
+    fn test_admin_only_fulfillment_transitions() {
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Paid, &OrderStatus::Processing));
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Processing, &OrderStatus::Shipped));
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Shipped, &OrderStatus::Delivered));
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Delivered, &OrderStatus::Completed));
+    }
+
+    #[test]
+    fn test_user_initiated_cancel_not_admin_only() {
+        assert!(!OrderStateMachine::is_admin_only_transition(&OrderStatus::Reserved, &OrderStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_admin_cancel_from_paid() {
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Paid, &OrderStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_refund_is_admin_only() {
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Delivered, &OrderStatus::Refunded));
+        assert!(OrderStateMachine::is_admin_only_transition(&OrderStatus::Returned, &OrderStatus::Refunded));
+    }
+
+    // -- Cancel override --
+
+    #[test]
+    fn test_cancel_override_from_any_state() {
+        // Admin cancel override works from any state
+        for status in &[
+            OrderStatus::Created, OrderStatus::Reserved, OrderStatus::Paid,
+            OrderStatus::Processing, OrderStatus::Shipped,
+        ] {
+            let result = OrderStateMachine::transition(*status, OrderStatus::Cancelled);
+            assert!(result.is_ok(), "Cancel should be allowed from {:?}", status);
+        }
+    }
+}
