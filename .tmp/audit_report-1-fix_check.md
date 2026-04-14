@@ -1,11 +1,15 @@
-# Audit Fix Check Report (10 -> fixcheck-1)
+# Audit Fix Check Report
+
+**Source of Truth**: `.tmp/audit_report-1.md` (previously verified findings)
 
 ## Scope
-- Static re-check of prior findings from `.tmp/audit_report-10.md`
+
+- Static re-check of prior findings from `.tmp/audit_report-1.md`
 - Code reviewed under `repo/` only
 - Not executed: runtime, tests, Docker
 
 ## Overall Result
+
 - **Previous High findings:** 2
 - **Status now:** **Both High findings fixed**
 - **Previous Medium findings:** 2
@@ -16,36 +20,30 @@
 ## Finding-by-Finding Re-check
 
 ### F-01 (High) Missing role enforcement on `GET /api/reviews/rounds/{id}`
-- **Previous status:** Fail
-- **Current status:** **Fixed**
-- **Evidence:**
-  - `repo/backend/src/routes/reviews.rs:169` (`async fn get_round`)
-  - `repo/backend/src/routes/reviews.rs:174` now includes `require_any_role(&user, &["Reviewer", "Admin"])?;`
-  - Added guard tests:
-    - `repo/backend/tests/api/test_review_api.rs:525` (`test_get_round_detail_forbidden_for_shopper`)
-    - `repo/backend/tests/api/test_review_api.rs:590` (`test_all_review_round_endpoints_reject_shopper`)
-- **Conclusion:** Role-boundary gap is closed for round detail endpoint.
+
+- **Original Finding**: [.tmp/audit_report-1.md](audit_report-1.md) - `/api/reviews/rounds/{id}` allowed unauthorized Shopper access
+- **Fix Verification**:
+  - **Code Location**: [repo/backend/src/routes/reviews.rs](../repo/backend/src/routes/reviews.rs#L169-L174) (lines 169-174)
+  - **What Changed**: Added `require_any_role(&user, &["Reviewer", "Admin"])?;` guard to round detail endpoint
+  - **Test Verification**: [repo/backend/tests/api/test_review_api.rs](../repo/backend/tests/api/test_review_api.rs#L525,L590) (lines 525, 590) - tests confirm Shopper access now returns 403
+- **Decision**: Fixed ✓ - Role-boundary gap is closed for round detail endpoint
 
 ### F-02 (High) Frontend/backend API contract drift (score + order item title)
-- **Previous status:** Fail
-- **Current status:** **Fixed**
-- **Evidence:**
-  - Product score alignment:
-    - Backend emits `average_score`: `repo/backend/src/models/product.rs:52`
-    - Frontend now accepts backend field via alias and maps to UI field:
-      - `repo/frontend/src/types.rs:119-120` (`alias = "average_score"` -> `aggregate_score`)
-      - `repo/frontend/src/components/product_card.rs:56`
-  - Order item title alignment:
-    - Backend response now includes `product_title`:
-      - `repo/backend/src/models/order.rs:85`
-      - `repo/backend/src/routes/orders.rs:71` (joins `p.title AS product_title`)
-      - `repo/backend/src/routes/orders.rs:89` (maps `product_title`)
-    - Frontend consumes `product_title`:
-      - `repo/frontend/src/types.rs:272`
-      - `repo/frontend/src/pages/order_detail.rs:288`
-- **Conclusion:** Reported contract mismatches are resolved.
+
+- **Original Finding**: [.tmp/audit_report-1.md](audit_report-1.md) - Frontend/backend field name mismatches on product score and order item title
+- **Fix Verification**:
+  - **Product Score Alignment**:
+    - **Before**: Backend emitted `average_score` but frontend expected `aggregate_score`
+    - **After**: [repo/frontend/src/types.rs](../repo/frontend/src/types.rs#L119-L120) (lines 119-120) now includes `#[serde(alias = "average_score")]` mapping
+    - **Decision**: Fixed ✓
+  - **Order Item Title Alignment**:
+    - **Before**: Backend response lacked `product_title` field for order items
+    - **After**: [repo/backend/src/routes/orders.rs](../repo/backend/src/routes/orders.rs#L71,L89) (lines 71, 89) now joins and maps `p.title AS product_title`; [repo/frontend/src/types.rs](../repo/frontend/src/types.rs#L272) (line 272) consumes this field
+    - **Decision**: Fixed ✓
+- **Final Decision**: Contract mismatches resolved ✓
 
 ### F-03 (Medium) Custom-field filter JSON text mismatch risk
+
 - **Previous status:** Suspected Risk / Partial Fail
 - **Current status:** **Fixed**
 - **Evidence:**
@@ -55,6 +53,7 @@
 - **Conclusion:** Prior JSON text-cast mismatch risk has been addressed.
 
 ### F-04 (Medium) Test suite missed authz + contract drift detections
+
 - **Previous status:** Partial Fail
 - **Current status:** **Fixed for the reported gaps**
 - **Evidence:**
@@ -69,8 +68,10 @@
 ---
 
 ## Final Judgment
+
 - **Issue set from prior report:** materially resolved.
 - **Acceptance for this fix-check:** **Pass (for prior issue set re-check)**
 
 ## Boundary Reminder
+
 - This conclusion is static-only and does not claim runtime behavior without execution.

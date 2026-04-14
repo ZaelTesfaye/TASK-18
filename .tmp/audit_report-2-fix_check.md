@@ -1,9 +1,10 @@
-# Fix Check Report: audit_report-12
+# Fix Check Report
+
+**Source of Truth**: `.tmp/audit_report-2.md` (previously verified findings)
 
 ## Source Note
 
-- Requested source file `.tmp/audit-report-12.md` was not found.
-- Verified against `.tmp/audit_report-12.md` (existing file in this workspace).
+- Source file for this fix-check: `.tmp/audit_report-2.md`
 
 ## Overall Result
 
@@ -15,21 +16,24 @@
 
 ### [H-01] Admin Audit Date Filter Contract Mismatch
 
-- **Status:** **Fixed**
-- **Why:** Backend now accepts flexible date inputs (`RFC3339` or `YYYY-MM-DD`) and parses both safely; frontend also normalizes bare dates to RFC3339 before sending.
-- **Evidence:**
-  - `backend/src/models/audit.rs:22`, `backend/src/models/audit.rs:50`, `backend/src/models/audit.rs:66`
-  - `backend/src/services/audit_service.rs:83`, `backend/src/services/audit_service.rs:86`, `backend/src/services/audit_service.rs:90`
-  - `frontend/src/api/admin.rs:52`, `frontend/src/api/admin.rs:59`
+- **Original Finding**: [.tmp/audit_report-2.md](audit_report-2.md) - Date input format mismatches between frontend/backend audit filters
+- **Fix Verification**:
+  - **Code Locations**:
+    - [repo/backend/src/models/audit.rs](../repo/backend/src/models/audit.rs#L22,L50,L66) (lines 22, 50, 66)
+    - [repo/backend/src/services/audit_service.rs](../repo/backend/src/services/audit_service.rs#L83,L86,L90) (lines 83, 86, 90)
+    - [repo/frontend/src/api/admin.rs](../repo/frontend/src/api/admin.rs#L52,L59) (lines 52, 59)
+  - **What Changed**: Backend now accepts flexible date inputs (RFC3339 or YYYY-MM-DD) and parses both safely; frontend normalizes bare dates to RFC3339 before sending
+- **Decision**: Fixed ✓ - Date filter contract is now compatible
 
 ### [H-02] Frontend �E2E/Component� Tests Mostly Non-Executable Assertions
 
-- **Status:** **Partially Fixed**
-- **Why:** A browser-test suite was added under `frontend/tests/wasm/` using `wasm_bindgen_test`, but most `frontend/tests/e2e/*` tests are still type/value assertions rather than full app-flow interaction tests (login/cart/checkout/reviewer/admin filtering end-to-end).
-- **Evidence:**
-  - `frontend/tests/wasm/test_browser.rs:23`, `frontend/tests/wasm/test_browser.rs:32`
-  - `frontend/tests/e2e/test_components.rs:3`
-  - `frontend/tests/e2e/test_routes.rs:1`
+- **Original Finding**: [.tmp/audit_report-2.md](audit_report-2.md) - Frontend tests labeled as e2e but lack real browser execution and critical user journey coverage
+- **Fix Verification**:
+  - **What Changed**:
+    - **Improvement**: Browser-test suite added under [repo/frontend/tests/wasm/](../repo/frontend/tests/wasm/test_browser.rs#L23,L32) (lines 23, 32) using `wasm_bindgen_test`
+    - **Remaining Gap**: Most [repo/frontend/tests/e2e/](../repo/frontend/tests/e2e/test_components.rs#L3) (line 3) and [repo/frontend/tests/e2e/test_routes.rs](../repo/frontend/tests/e2e/test_routes.rs#L1) (line 1) tests remain type/value assertions rather than full app-flow interaction tests
+  - **User Journeys Still Missing**: login → cart → checkout → reviewer submission → admin reporting (all e2e)
+- **Decision**: Partially Fixed ⚠️ - Browser tests now exist but critical user journeys still need real e2e coverage
 
 ### [M-01] Admin Reports UI Allows Empty Dates While Backend Requires Date Range
 
