@@ -22,6 +22,11 @@ async fn test_create_topic_forbidden_for_shopper() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        body["error"].is_string() || body["message"].is_string(),
+        "403 response must contain an error or message field"
+    );
 }
 
 #[actix_web::test]
@@ -40,6 +45,9 @@ async fn test_create_topic_admin_allowed() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["id"].is_string(), "Created topic must return an id");
+    assert!(body["name"].is_string(), "Created topic must return a name");
 }
 
 #[actix_web::test]
@@ -55,6 +63,11 @@ async fn test_create_tag_forbidden_for_reviewer() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        body["error"].is_string() || body["message"].is_string(),
+        "403 response must contain an error or message field"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +91,8 @@ async fn test_create_custom_field_forbidden_for_shopper() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "403 must have error body");
 }
 
 #[actix_web::test]
@@ -93,6 +108,8 @@ async fn test_publish_field_forbidden_for_reviewer() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "403 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +130,8 @@ async fn test_moderate_rating_forbidden_for_shopper() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "403 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +153,8 @@ async fn test_simulate_payment_unauthenticated() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +181,8 @@ async fn test_simulate_payment_requires_order_ownership() {
     let resp = test::call_service(&app, req).await;
     // Order doesn't exist, so 404 (before ownership check even triggers)
     assert_eq!(resp.status(), 404);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "404 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +200,8 @@ async fn test_review_submission_requires_auth() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +221,8 @@ async fn test_attachment_download_requires_reviewer_role() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "403 must have error body");
 }
 
 #[actix_web::test]
@@ -211,6 +238,8 @@ async fn test_attachment_download_nonexistent_returns_404() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 404);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "404 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +260,9 @@ async fn test_backup_verify_nonexistent_returns_error() {
     let resp = test::call_service(&app, req).await;
     // Should fail gracefully — not a 500 from invalid enum
     assert!(resp.status() != 500, "Backup verify should not return 500 from invalid enum");
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string() || body["valid"].is_boolean(),
+        "Backup verify must return a structured response body");
 }
 
 #[actix_web::test]
@@ -246,6 +278,9 @@ async fn test_backup_restore_nonexistent_returns_error() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status() != 500, "Backup restore should not return 500");
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(),
+        "Backup restore error must return a structured response body");
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +299,8 @@ async fn test_revoked_token_rejected_on_protected_route() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -277,6 +314,8 @@ async fn test_malformed_bearer_token_rejected() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -290,6 +329,8 @@ async fn test_non_bearer_auth_rejected() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +351,8 @@ async fn test_shopper_cannot_access_other_users_order() {
     let resp = test::call_service(&app, req).await;
     // Should be 404 (not found for this user) — not 200
     assert_eq!(resp.status(), 404);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "404 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +365,8 @@ async fn test_users_me_requires_auth() {
     let req = test::TestRequest::get().uri("/api/users/me").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -330,6 +375,8 @@ async fn test_orders_requires_auth() {
     let req = test::TestRequest::get().uri("/api/orders").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -338,6 +385,8 @@ async fn test_cart_requires_auth() {
     let req = test::TestRequest::get().uri("/api/cart").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -346,6 +395,8 @@ async fn test_admin_users_requires_auth() {
     let req = test::TestRequest::get().uri("/api/admin/users").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -354,6 +405,8 @@ async fn test_audit_requires_auth() {
     let req = test::TestRequest::get().uri("/api/audit").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 #[actix_web::test]
@@ -362,6 +415,8 @@ async fn test_backup_requires_auth() {
     let req = test::TestRequest::post().uri("/api/backup").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body["error"].is_string() || body["message"].is_string(), "401 must have error body");
 }
 
 // ---------------------------------------------------------------------------
@@ -384,5 +439,10 @@ async fn test_shopper_cannot_access_review_rounds() {
         resp.status(), 403,
         "Shopper must not access review rounds, got {}",
         resp.status()
+    );
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        body["error"].is_string() || body["message"].is_string(),
+        "403 response must contain an error or message field"
     );
 }

@@ -9,4 +9,7 @@ mod test_rbac_api;
 mod test_object_authz;
 mod test_field_conflict_workflow;
 mod test_risk_event_schema;
+mod test_taxonomy_api;
+mod test_user_api;
+mod test_health_api;
 mod common;

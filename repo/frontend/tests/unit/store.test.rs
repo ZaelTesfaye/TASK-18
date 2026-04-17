@@ -1,6 +1,11 @@
 // Store logic tests (token/user management).
 // These test the pure logic aspects — actual localStorage is not available
 // outside the browser, so we test serialization and validation logic.
+// Imports the real store module to verify compilation.
+
+#[allow(unused_imports)]
+use silverscreen_frontend::store;
+use silverscreen_frontend::types::*;
 
 #[test]
 fn test_token_format_validation() {

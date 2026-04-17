@@ -381,6 +381,86 @@ async fn test_field_publish_gate_clean_field_succeeds() {
         "Published field must have status 'Published'");
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/custom-fields — authenticated list
+// ---------------------------------------------------------------------------
+
+/// GET /api/custom-fields - authenticated admin can list fields.
+#[actix_web::test]
+async fn test_list_custom_fields_authenticated() {
+    let app = common::create_test_app().await;
+    let token = common::admin_token();
+
+    let req = test::TestRequest::get()
+        .uri("/api/custom-fields")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(body.is_array(), "GET /api/custom-fields must return a JSON array");
+}
+
+/// GET /api/custom-fields - unauthenticated returns 401.
+#[actix_web::test]
+async fn test_list_custom_fields_unauthenticated() {
+    let app = common::create_test_app().await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/custom-fields")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        body["error"].is_string() || body["message"].is_string(),
+        "401 response must contain an error or message field"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/custom-fields/{id}/conflicts/{product_id} — resolve conflict
+// ---------------------------------------------------------------------------
+
+/// PUT /api/custom-fields/{id}/conflicts/{product_id} - nonexistent conflict returns 404.
+#[actix_web::test]
+async fn test_resolve_conflict_nonexistent_returns_404() {
+    let app = common::create_test_app().await;
+    let token = common::admin_token();
+    let field_id = uuid::Uuid::new_v4();
+    let product_id = uuid::Uuid::new_v4();
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/custom-fields/{}/conflicts/{}", field_id, product_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({ "resolved_value": "42" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 404, "Resolving nonexistent conflict must return 404");
+}
+
+/// PUT /api/custom-fields/{id}/conflicts/{product_id} - forbidden for shopper (403).
+#[actix_web::test]
+async fn test_resolve_conflict_forbidden_for_shopper() {
+    let app = common::create_test_app().await;
+    let token = common::shopper_token();
+    let field_id = uuid::Uuid::new_v4();
+    let product_id = uuid::Uuid::new_v4();
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/custom-fields/{}/conflicts/{}", field_id, product_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({ "resolved_value": "test" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        body["error"].is_string() || body["message"].is_string(),
+        "403 response must contain an error or message field"
+    );
+}
+
 /// Creates a field, adds a value, changes the field type to create a conflict,
 /// then verifies the full lifecycle: conflict marked Pending → publish blocked →
 /// resolve conflict → publish succeeds.

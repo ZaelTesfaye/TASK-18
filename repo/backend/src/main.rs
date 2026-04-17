@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer, HttpResponse};
+use actix_web::{web, App, HttpServer};
 use chrono::Timelike;
 use tracing_actix_web::TracingLogger;
 
@@ -15,10 +15,8 @@ mod services;
 use config::Config;
 use middleware::rate_limit::RateLimiter;
 
-/// Health-check endpoint.
-async fn health() -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({ "status": "ok" }))
-}
+// Re-use the library-exported health handler so tests exercise the same code path.
+use silverscreen_backend::health;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

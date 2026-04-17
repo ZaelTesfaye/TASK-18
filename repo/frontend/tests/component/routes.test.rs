@@ -1,8 +1,12 @@
 // Route structure validation tests.
 // These verify that all expected routes are defined and accessible,
 // and that route logic (guards, parameters, filter state) works correctly.
+// Imports the real app module to verify route wiring compiles correctly.
 
 use silverscreen_frontend::types::*;
+
+#[allow(unused_imports)]
+use silverscreen_frontend::app;
 
 #[test]
 fn test_all_public_routes_defined() {

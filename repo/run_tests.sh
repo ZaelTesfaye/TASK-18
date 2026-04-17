@@ -1,29 +1,43 @@
 #!/bin/bash
 # SilverScreen Test Runner
-# Executes all backend and frontend tests with summary output
+# Executes all backend and frontend tests with summary output.
 #
-# Native host usage (no Docker):
-#   1. Ensure PostgreSQL is running and DATABASE_URL is exported.
-#   2. Apply migration:  psql -d silverscreen -f backend/migrations/001_initial.sql
-#   3. Export env:        source .env   (or export DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY)
-#   4. Backend tests:    cd backend && cargo test --lib -- --test-threads=1
-#                        cargo test --test '*' -- --test-threads=1
-#   5. Frontend tests:   cd frontend && cargo test --all-targets && cargo test --test '*'
+# Default mode (no arguments): runs everything inside Docker containers.
+# No local toolchain (rustup, cargo, psql) is required on the host.
+# This is the only supported invocation in CI.
+#
+# Developer escape hatch (NOT the canonical path — never use in CI):
+#   ALLOW_LOCAL_RUN=true ./run_tests.sh
+#   Requires: cargo, rustup, and exported env vars on the host.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use host cargo when present; otherwise fall back to an ephemeral Rust container.
-USE_DOCKER_CARGO=0
-if ! command -v cargo >/dev/null 2>&1; then
-  if command -v docker >/dev/null 2>&1; then
-    USE_DOCKER_CARGO=1
-    echo "Host cargo not found. Using Dockerized Rust toolchain for compile/tests."
-  else
-    echo "FATAL: cargo not found and docker is unavailable."
+# ---------------------------------------------------------------------------
+# Mode selection: Docker (default) vs Local (ALLOW_LOCAL_RUN=true only)
+# ---------------------------------------------------------------------------
+USE_DOCKER_CARGO=1   # Docker is the default — always.
+
+if [ "${ALLOW_LOCAL_RUN:-}" = "true" ]; then
+  echo "========================================================"
+  echo "  WARNING: ALLOW_LOCAL_RUN=true detected."
+  echo "  Running in LOCAL mode — NOT the canonical test path."
+  echo "  This bypasses the Docker-only policy."
+  echo "  Requires: cargo, rustup, env vars on the host."
+  echo "  For reproducible CI results, unset ALLOW_LOCAL_RUN."
+  echo "========================================================"
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "FATAL: local mode requires cargo on the host. Install via rustup."
     exit 1
   fi
+  USE_DOCKER_CARGO=0
+else
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "FATAL: docker is required. Install Docker to run tests."
+    exit 1
+  fi
+  echo "Running in Docker mode (no local toolchain required)."
 fi
 
 run_cargo() {
@@ -247,9 +261,12 @@ if [ "$E2E_FAILED" -gt 0 ]; then
 fi
 echo ""
 
-# --- Frontend WASM Browser Tests (optional — requires wasm-pack + headless Chrome) ---
-echo "--- Frontend WASM Browser Tests ---"
+# --- Frontend WASM Browser Tests (includes E2E flows — requires wasm-pack + headless Chrome) ---
+echo "--- Frontend WASM Browser + E2E Tests ---"
 if command -v wasm-pack &>/dev/null; then
+  # The wasm test suite includes both browser-level component tests and
+  # full-stack E2E flows (register→login→cart→order) that hit the live backend.
+  # E2E tests gracefully skip if the backend is not reachable.
   WASM_OUTPUT=$(wasm-pack test --headless --chrome --test wasm 2>&1) || true
   WASM_TOTAL=$(echo "$WASM_OUTPUT" | grep -oP 'test result:.*?(\d+) passed' | grep -oP '\d+' | tail -1 || echo "0")
   WASM_FAILED=$(echo "$WASM_OUTPUT" | grep -oP '(\d+) failed' | grep -oP '\d+' | head -1 || echo "0")
@@ -261,7 +278,7 @@ if command -v wasm-pack &>/dev/null; then
   FAILED=$((FAILED + WASM_FAILED))
   echo "  Total: $WASM_COUNT | Passed: $WASM_PASSED | Failed: $WASM_FAILED"
   if [ "$WASM_FAILED" -gt 0 ]; then
-    ERRORS="$ERRORS\n[Frontend WASM] $WASM_FAILED test(s) failed:\n$(echo "$WASM_OUTPUT" | grep 'FAILED\|panicked')\n"
+    ERRORS="$ERRORS\n[Frontend WASM/E2E] $WASM_FAILED test(s) failed:\n$(echo "$WASM_OUTPUT" | grep 'FAILED\|panicked')\n"
   fi
 else
   echo "  SKIPPED (wasm-pack not installed)"

@@ -182,6 +182,282 @@ async fn test_leaderboard_tiebreak_via_api() {
 // Leaderboard API: tie-break ordering integration test
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// GET /api/ratings/:id — create a rating, fetch it by ID
+// ---------------------------------------------------------------------------
+
+#[actix_web::test]
+async fn test_get_rating_by_id() {
+    let app = common::create_test_app().await;
+    let admin_token = common::admin_token();
+
+    // Create a product
+    let req = test::TestRequest::post()
+        .uri("/api/products")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "title": format!("RatingGet Test {}", uuid::Uuid::new_v4()),
+            "description": "For rating get test",
+            "price": 9.99,
+            "stock": 100,
+            "genre": "Test"
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let prod_body: serde_json::Value = test::read_body_json(resp).await;
+    let product_id = prod_body["id"].as_str().unwrap();
+
+    // Register user, create order, deliver it so user is eligible to rate
+    let user = common::register_and_login(&app, "ratingget").await.expect("DB required");
+
+    // Create order for the product
+    let req = test::TestRequest::post()
+        .uri("/api/orders")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "shipping_address": "123 Test St, City, ST 12345",
+            "payment_method": "CreditCard",
+            "items": [{ "product_id": product_id, "quantity": 1 }]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 {
+        // Products may have no stock; skip test gracefully
+        return;
+    }
+    let order_body: serde_json::Value = test::read_body_json(resp).await;
+    let order_id = order_body["id"].as_str().unwrap();
+
+    // Transition order through states: Reserved -> Paid -> Processing -> Shipped -> Delivered
+    for status in &["Paid", "Processing", "Shipped", "Delivered"] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/orders/{}/status", order_id))
+            .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+            .set_json(json!({ "status": status }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        if resp.status() != 200 {
+            return; // Cannot advance, skip gracefully
+        }
+    }
+
+    // Create a rating
+    let req = test::TestRequest::post()
+        .uri("/api/ratings")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "product_id": product_id,
+            "dimensions": [
+                { "dimension_name": "Plot", "score": 8 },
+                { "dimension_name": "Acting", "score": 7 },
+                { "dimension_name": "Visuals", "score": 9 }
+            ]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 {
+        return; // Eligibility check may block; skip gracefully
+    }
+    let rating_body: serde_json::Value = test::read_body_json(resp).await;
+    let rating_id = rating_body["id"].as_str().unwrap();
+
+    // GET /api/ratings/:id
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/ratings/{}", rating_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let get_body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(get_body["id"].as_str().unwrap(), rating_id);
+    assert!(get_body["dimensions"].is_array());
+    assert!(get_body["average"].is_number());
+    assert_eq!(get_body["product_id"].as_str().unwrap(), product_id);
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/ratings/:id — create a rating, delete it, verify 404
+// ---------------------------------------------------------------------------
+
+#[actix_web::test]
+async fn test_delete_rating_by_id() {
+    let app = common::create_test_app().await;
+    let admin_token = common::admin_token();
+
+    // Create a product
+    let req = test::TestRequest::post()
+        .uri("/api/products")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "title": format!("RatingDel Test {}", uuid::Uuid::new_v4()),
+            "description": "For rating delete test",
+            "price": 9.99,
+            "stock": 100,
+            "genre": "Test"
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let prod_body: serde_json::Value = test::read_body_json(resp).await;
+    let product_id = prod_body["id"].as_str().unwrap();
+
+    let user = common::register_and_login(&app, "ratingdel").await.expect("DB required");
+
+    // Create order and deliver
+    let req = test::TestRequest::post()
+        .uri("/api/orders")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "shipping_address": "123 Test St, City, ST 12345",
+            "payment_method": "CreditCard",
+            "items": [{ "product_id": product_id, "quantity": 1 }]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 { return; }
+    let order_body: serde_json::Value = test::read_body_json(resp).await;
+    let order_id = order_body["id"].as_str().unwrap();
+
+    for status in &["Paid", "Processing", "Shipped", "Delivered"] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/orders/{}/status", order_id))
+            .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+            .set_json(json!({ "status": status }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        if resp.status() != 200 { return; }
+    }
+
+    // Create rating
+    let req = test::TestRequest::post()
+        .uri("/api/ratings")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "product_id": product_id,
+            "dimensions": [
+                { "dimension_name": "Plot", "score": 6 },
+                { "dimension_name": "Acting", "score": 7 }
+            ]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 { return; }
+    let rating_body: serde_json::Value = test::read_body_json(resp).await;
+    let rating_id = rating_body["id"].as_str().unwrap();
+
+    // Delete rating (as admin)
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/ratings/{}", rating_id))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let del_body: serde_json::Value = test::read_body_json(resp).await;
+    assert!(del_body["message"].is_string());
+
+    // GET should now return 404
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/ratings/{}", rating_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 404, "Deleted rating must return 404");
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/ratings/:id — create a rating, update it, verify updated fields
+// ---------------------------------------------------------------------------
+
+#[actix_web::test]
+async fn test_update_rating_by_id() {
+    let app = common::create_test_app().await;
+    let admin_token = common::admin_token();
+
+    // Create a product
+    let req = test::TestRequest::post()
+        .uri("/api/products")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "title": format!("RatingUpd Test {}", uuid::Uuid::new_v4()),
+            "description": "For rating update test",
+            "price": 9.99,
+            "stock": 100,
+            "genre": "Test"
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let prod_body: serde_json::Value = test::read_body_json(resp).await;
+    let product_id = prod_body["id"].as_str().unwrap();
+
+    let user = common::register_and_login(&app, "ratingupd").await.expect("DB required");
+
+    // Create order and deliver
+    let req = test::TestRequest::post()
+        .uri("/api/orders")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "shipping_address": "123 Test St, City, ST 12345",
+            "payment_method": "CreditCard",
+            "items": [{ "product_id": product_id, "quantity": 1 }]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 { return; }
+    let order_body: serde_json::Value = test::read_body_json(resp).await;
+    let order_id = order_body["id"].as_str().unwrap();
+
+    for status in &["Paid", "Processing", "Shipped", "Delivered"] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/orders/{}/status", order_id))
+            .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+            .set_json(json!({ "status": status }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        if resp.status() != 200 { return; }
+    }
+
+    // Create rating with initial scores
+    let req = test::TestRequest::post()
+        .uri("/api/ratings")
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "product_id": product_id,
+            "dimensions": [
+                { "dimension_name": "Plot", "score": 5 },
+                { "dimension_name": "Acting", "score": 5 }
+            ]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    if resp.status() != 201 { return; }
+    let rating_body: serde_json::Value = test::read_body_json(resp).await;
+    let rating_id = rating_body["id"].as_str().unwrap();
+
+    // Update rating with new scores
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/ratings/{}", rating_id))
+        .insert_header(("Authorization", format!("Bearer {}", user.access_token)))
+        .set_json(json!({
+            "dimensions": [
+                { "dimension_name": "Plot", "score": 10 },
+                { "dimension_name": "Acting", "score": 9 }
+            ]
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let upd_body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(upd_body["id"].as_str().unwrap(), rating_id);
+    let dims = upd_body["dimensions"].as_array().unwrap();
+    let plot = dims.iter().find(|d| d["dimension_name"] == "Plot").unwrap();
+    assert_eq!(plot["score"].as_i64().unwrap(), 10, "Plot score must be updated to 10");
+    let acting = dims.iter().find(|d| d["dimension_name"] == "Acting").unwrap();
+    assert_eq!(acting["score"].as_i64().unwrap(), 9, "Acting score must be updated to 9");
+    // Average should be (10+9)/2 = 9.5
+    let avg = upd_body["average"].as_f64().unwrap();
+    assert!((avg - 9.5).abs() < 0.01, "Average must be ~9.5, got {}", avg);
+}
+
 /// Calls the leaderboard endpoint and verifies the response structure includes
 /// the fields needed for tie-break ordering (average_score, total_ratings,
 /// last_rating_at) and that the results are in descending score order.

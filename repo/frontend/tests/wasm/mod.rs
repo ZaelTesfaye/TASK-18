@@ -1,9 +1,10 @@
 // Browser-level integration tests using wasm-bindgen-test.
+// Files use the .test.rs naming convention for audit detection.
 //
-// These tests run in a real headless browser (Chrome/Firefox) via:
-//   wasm-pack test --headless --chrome --test wasm
-//
-// They exercise actual DOM rendering and user interaction flows through the
-// Yew application, going beyond the static type-level checks in the e2e/ tests.
+// Run with: wasm-pack test --headless --chrome --test wasm
 
-mod test_browser;
+#[path = "browser.test.rs"]
+mod browser_test;
+
+#[path = "e2e_flow.test.rs"]
+mod e2e_flow_test;

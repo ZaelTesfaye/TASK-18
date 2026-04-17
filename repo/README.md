@@ -1,3 +1,5 @@
+Project Type: fullstack
+
 # SilverScreen Commerce & Review Platform
 
 A full-stack offline-first commerce and review platform built with **Actix-web** (Rust backend), **Yew** (Rust/WASM frontend), and **PostgreSQL**.
@@ -44,6 +46,54 @@ docker-compose up --build
 
 > **Note:** The `.env` file is required. All secrets (database password, JWT secret, encryption keys) are read from `.env` — the `docker-compose.yml` file contains zero plaintext secrets. See `.env.example` for the full list of required variables.
 
+All dependencies are managed inside Docker. Run `docker-compose up --build` — no local toolchain installation is required.
+
+## Verifying the Setup
+
+After `docker-compose up --build` completes and all three services are healthy:
+
+**Step 1 — Seed demo users** (one-time, idempotent):
+
+```bash
+./seed_demo_users.sh
+```
+
+This registers all three demo accounts and promotes the admin and reviewer roles automatically. No manual SQL is required.
+
+**Step 2 — Verify the API:**
+
+```bash
+# Confirm the API is running
+curl -s http://localhost:8080/health
+# Expected: {"status":"ok"}
+
+# Log in as each role to confirm auth works
+curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin1234!"}'
+# Expected: {"access_token":"...","refresh_token":"...","token_type":"Bearer"}
+```
+
+**Step 3 — Verify each role in the UI** (http://localhost:8081):
+
+| Role     | Steps |
+|----------|-------|
+| Shopper  | Log in as `shopper` / `Shop1234!`. Browse the catalog, add an item to the cart, proceed to checkout. Confirm the order appears in "My Orders". |
+| Reviewer | Log in as `reviewer` / `Review1234!`. Navigate to `/reviewer/rounds`. Confirm the review rounds list loads (may be empty if none are seeded). |
+| Admin    | Log in as `admin` / `Admin1234!`. Navigate to `/admin`. Confirm the admin dashboard loads with links to Users, Taxonomy, Audit Log, Reports, and Backup. |
+
+## Demo Credentials
+
+All demo accounts are seeded by `./seed_demo_users.sh` (run once after startup):
+
+| Role     | Username   | Email                    | Password      |
+|----------|------------|--------------------------|---------------|
+| Admin    | admin      | admin@example.com        | Admin1234!    |
+| Reviewer | reviewer   | reviewer@example.com     | Review1234!   |
+| Shopper  | shopper    | shopper@example.com      | Shop1234!     |
+
+The seed script registers the users via the API and promotes roles via the database container. It is idempotent — running it multiple times is safe.
+
 ## Architecture
 
 ```
@@ -82,48 +132,13 @@ repo/
 
 ## Running Tests
 
-### Using Docker (container)
-
 ```bash
 ./run_tests.sh
 ```
 
-This script runs all backend unit + API tests and frontend tests, outputting a clear summary of totals, passes, and failures.
+This script runs all backend unit + API tests and frontend tests inside Docker containers, outputting a clear summary of totals, passes, and failures. No local toolchain (rustup, cargo, psql) is required.
 
-### Running Natively (without Docker)
-
-If you prefer running tests directly on the host, ensure the following prerequisites:
-
-1. **Rust toolchain** with `wasm32-unknown-unknown` target:
-   ```bash
-   rustup target add wasm32-unknown-unknown
-   ```
-
-2. **PostgreSQL** running locally with the schema applied:
-   ```bash
-   psql -U postgres -d silverscreen -f backend/migrations/001_initial.sql
-   ```
-
-3. **Environment variables** — export these or create a `.env` in the backend directory:
-   ```bash
-   export DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/silverscreen"
-   export JWT_SECRET="your_jwt_secret_at_least_32_chars_long"
-   export ENCRYPTION_KEY="your_encryption_key_at_least_32_chars"
-   ```
-
-4. **Backend tests** (unit + integration):
-   ```bash
-   cd backend
-   cargo test --lib -- --test-threads=1       # Unit tests
-   cargo test --test '*' -- --test-threads=1   # API integration tests
-   ```
-
-5. **Frontend tests** (unit + contract):
-   ```bash
-   cd frontend
-   cargo test --all-targets     # Unit tests (native target)
-   cargo test --test '*'        # Contract / E2E tests
-   ```
+All development and testing is container-contained. Do not install Rust, wasm toolchains, or database clients on the host.
 
 ## Environment
 

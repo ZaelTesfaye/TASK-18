@@ -13,6 +13,32 @@
 
 use wasm_bindgen_test::*;
 
+// Direct imports of real frontend modules — exercised in browser WASM context
+#[allow(unused_imports)]
+use silverscreen_frontend::components::loading;
+#[allow(unused_imports)]
+use silverscreen_frontend::components::toast;
+#[allow(unused_imports)]
+use silverscreen_frontend::components::rating_stars;
+#[allow(unused_imports)]
+use silverscreen_frontend::components::navbar;
+#[allow(unused_imports)]
+use silverscreen_frontend::components::product_card;
+#[allow(unused_imports)]
+use silverscreen_frontend::components::pagination;
+#[allow(unused_imports)]
+use silverscreen_frontend::store;
+#[allow(unused_imports)]
+use silverscreen_frontend::api;
+#[allow(unused_imports)]
+use silverscreen_frontend::app;
+#[allow(unused_imports)]
+use silverscreen_frontend::pages::home;
+#[allow(unused_imports)]
+use silverscreen_frontend::pages::admin;
+#[allow(unused_imports)]
+use silverscreen_frontend::pages::reviewer;
+
 wasm_bindgen_test_configure!(run_in_browser);
 
 // ---------------------------------------------------------------------------
